@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สั่งงาน MoonRacle</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#000)}
+label{display:block;margin:12px 0 4px;font-size:14px;color:var(--tg-theme-hint-color,#888)}
+select,input,textarea{width:100%;box-sizing:border-box;padding:10px;font:inherit;border:1px solid var(--tg-theme-hint-color,#ccc);border-radius:8px;background:var(--tg-theme-secondary-bg-color,#f4f4f4);color:inherit}
+textarea{min-height:140px}
+</style>
+</head>
+<body>
+<label for="project">โปรเจกต์</label>
+<select id="project">
+  <option>moonracle-kb</option>
+  <option>moonracle-platform</option>
+  <option>moonracle-web</option>
+  <option>moonracle-music</option>
+  <option>moonracle-resume</option>
+</select>
+<label for="priority">ความสำคัญ</label>
+<select id="priority">
+  <option value="normal">ปกติ</option>
+  <option value="low">ต่ำ</option>
+  <option value="high">สูง</option>
+</select>
+<label for="title">หัวข้องาน</label>
+<input id="title" maxlength="150">
+<label for="detail">รายละเอียด</label>
+<textarea id="detail" maxlength="1000"></textarea>
+<script>
+const tg = Telegram.WebApp;
+tg.ready();
+tg.MainButton.setText("ส่งงานให้น้องมูน").show();
+tg.MainButton.onClick(() => {
+  const title = document.getElementById("title").value.trim();
+  if (!title) return tg.showAlert("ใส่หัวข้องานก่อน");
+  // sendData limit is 4096 bytes; Thai is 3 bytes/char, so 150+1000 chars stays under it.
+  tg.sendData(JSON.stringify({
+    v: 1,
+    project: document.getElementById("project").value,
+    priority: document.getElementById("priority").value,
+    title,
+    detail: document.getElementById("detail").value.trim()
+  }));
+});
+</script>
+</body>
+</html>
