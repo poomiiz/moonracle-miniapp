@@ -200,7 +200,7 @@ function workMenu() {
     const grid = el('div', null, 'grid');
     CATEGORIES.filter(item => item[2] === group).forEach(([key, label]) => {
       const button = el('button', label, 'card category'); button.type = 'button';
-      button.onclick = () => key === 'overview' ? go('overview') : key === 'content' ? go('content') : key === 'trends' ? go('news') : newTask({category:key, label}); grid.append(button);
+      button.onclick = () => key === 'overview' ? go('overview') : key === 'content' ? go('content') : key === 'trends' ? go('news') : openKbTool(key); grid.append(button);
     });
     view.append(el('h2', group, 'group-title'), grid);
   }
