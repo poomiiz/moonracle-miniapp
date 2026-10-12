@@ -13,6 +13,7 @@ nav button.on{background:var(--tg-theme-button-color,#2481cc);color:var(--tg-the
 .card{padding:12px;margin-bottom:8px;border-radius:10px;background:var(--tg-theme-secondary-bg-color,#f4f4f4)}
 .meta{font-size:12px;color:var(--tg-theme-hint-color,#888);margin-top:4px}
 .err{color:#d33}
+input{width:100%;box-sizing:border-box;padding:10px;font:inherit;font-size:20px;letter-spacing:.3em;border:1px solid var(--tg-theme-hint-color,#ccc);border-radius:8px;background:var(--tg-theme-bg-color,#fff);color:inherit}
 pre{white-space:pre-wrap;word-break:break-word;font:inherit;margin:8px 0}
 .act{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 </style>
@@ -29,8 +30,14 @@ const TABS = [["pending","รอทำ"],["in_progress","กำลังทำ"]
 const view = document.getElementById("view");
 let current = "pending";
 
+// Inside Telegram we send signed initData; in a normal browser we use an OTP bearer token.
+function token() { try { return sessionStorage.getItem("kb_token"); } catch { return null; } }
 async function api(path, opts = {}) {
-  const r = await fetch(API + path, {...opts, headers: {"X-Telegram-Init-Data": tg.initData, "Content-Type": "application/json"}});
+  const headers = {"Content-Type": "application/json"};
+  if (tg.initData) headers["X-Telegram-Init-Data"] = tg.initData;
+  else if (token()) headers["Authorization"] = "Bearer " + token();
+  const r = await fetch(API + path, {...opts, headers});
+  if (r.status === 401 && !tg.initData) { try { sessionStorage.removeItem("kb_token"); } catch {} login(); throw new Error("กรุณาล็อกอิน"); }
   if (r.status === 401) throw new Error("เข้าไม่ได้ ต้องเปิดผ่านปุ่มใน @nongmoonbot");
   if (!r.ok) throw new Error("เกิดข้อผิดพลาด " + r.status);
   return r.json();
@@ -81,17 +88,36 @@ async function detail(id) {
 
 function statusBtn(id, status, label) {
   const b = el("button", label);
-  b.onclick = () => tg.showConfirm(`ยืนยัน: ${label}?`, async ok => {
+  const run = async ok => {
     if (!ok) return;
     try { await api(`/tasks/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify({status})}); list(); }
-    catch (e) { tg.showAlert(e.message); }
-  });
+    catch (e) { tg.initData ? tg.showAlert(e.message) : alert(e.message); }
+  };
+  // Telegram popups only work inside Telegram; plain browsers use confirm().
+  b.onclick = () => tg.initData ? tg.showConfirm(`ยืนยัน: ${label}?`, run) : run(confirm(`ยืนยัน: ${label}?`));
   return b;
 }
 
+function login() {
+  document.getElementById("tabs").replaceChildren();
+  const c = el("div", null, "card"), msg = el("p", "กดขอรหัส แล้วใส่รหัส 6 หลักที่ @nongmoonbot ส่งให้ใน Telegram", "meta");
+  const code = el("input"); code.inputMode = "numeric"; code.maxLength = 6; code.autocomplete = "one-time-code";
+  const req = el("button", "ขอรหัส"), go = el("button", "เข้าสู่ระบบ"), act = el("div", null, "act");
+  req.onclick = async () => {
+    const r = await fetch(API + "/auth/otp/request", {method: "POST"}).catch(() => null);
+    msg.textContent = !r ? "ติดต่อคอมไม่ได้" : r.ok ? "ส่งรหัสแล้ว ดูใน Telegram" : r.status === 429 ? "ขอได้นาทีละครั้ง รอสักครู่" : "ขอรหัสไม่ได้ (" + r.status + ")";
+  };
+  go.onclick = async () => {
+    const r = await fetch(API + "/auth/otp/verify", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code: code.value.trim()})}).catch(() => null);
+    if (!r || !r.ok) { msg.textContent = r && r.status === 401 ? "รหัสไม่ถูกหรือหมดอายุ" : "ล็อกอินไม่ได้"; return; }
+    try { sessionStorage.setItem("kb_token", (await r.json()).token); } catch {}
+    renderTabs(); list();
+  };
+  act.append(req, go); c.append(msg, code, act); view.replaceChildren(c);
+}
+
 tg.BackButton.onClick(list);
-renderTabs();
-list();
+if (!tg.initData && !token()) login(); else { renderTabs(); list(); }
 </script>
 </body>
 </html>
