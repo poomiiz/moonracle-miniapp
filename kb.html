@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MoonRacle KB</title>
+<link rel="manifest" href="kb.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MoonRacle KB">
+<meta name="theme-color" content="#12111c">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 /* Mobile take on the KB "ภาพรวม" dashboard; dark only, matching the desktop KB. */
@@ -77,7 +81,7 @@ async function api(path, opts = {}) {
   return r.json();
 }
 function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
-function fail(e) { view.replaceChildren(el("p", e.message, "err")); }
+function fail(e) { if (!tg.initData && !token()) return; view.replaceChildren(el("p", e.message, "err")); }
 function popup(msg) { tg.initData ? tg.showAlert(msg) : alert(msg); }
 const fmt = n => n == null ? "–" : Number(n).toLocaleString("en-US");
 // "label <b class=cls>value</b>" pairs, built without innerHTML.
@@ -248,15 +252,33 @@ function statusBtn(id, status, label) {
   return b;
 }
 
-function login() {
+async function login() {
   try { sessionStorage.removeItem("kb_token"); } catch {}
   document.querySelector("nav").replaceChildren();
-  const card = el("div", null, "card");
-  const link = el("a", "เปิดแอป Telegram เพื่อเข้าเว็บงาน");
-  link.href = "https://t.me/nongmoonbot?start=web";
-  link.style.cssText = "display:inline-block;padding:14px 18px;border-radius:12px;background:var(--accent);color:white;text-decoration:none";
-  card.append(el("h2", "เข้าใช้งานผ่าน Telegram"), el("p", "เปิด @nongmoonbot แล้วกด เปิดเว็บงาน ระบบใช้บัญชี Telegram ของพี่โดยตรง", "sub"), link);
-  view.replaceChildren(card);
+  const card = el("div", null, "card"), message = el("p", "ล็อกอินด้วย Telegram ที่ปุ่มด้านล่าง เสร็จแล้วหน้างานจะเปิดในเว็บแอปนี้", "sub");
+  const actions = el("div", null, "act");
+  card.append(el("h2", "เข้าสู่ระบบด้วย Telegram"), message, actions); view.replaceChildren(card);
+  try {
+    const response = await fetch(API + "/auth/telegram/config");
+    const config = await response.json();
+    if (!response.ok) throw new Error(config.detail || "เชื่อม Telegram ไม่ได้");
+    window.onTelegramLogin = async user => {
+      try {
+        const response = await fetch(API + "/auth/telegram/verify", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user, nonce: config.nonce})});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "เข้าสู่ระบบไม่สำเร็จ");
+        sessionStorage.setItem("kb_token", data.token); renderTabs(); show();
+      } catch (error) {
+        message.textContent = error.message; const retry = el("button", "ลองเข้าสู่ระบบใหม่"); retry.type = "button"; retry.onclick = login; actions.replaceChildren(retry);
+      }
+    };
+    const widget = document.createElement("script");
+    widget.src = "https://telegram.org/js/telegram-widget.js?22";
+    widget.dataset.telegramLogin = config.bot_username;
+    widget.dataset.size = "large"; widget.dataset.userpic = "false";
+    widget.dataset.onauth = "onTelegramLogin(user)";
+    widget.async = true; actions.append(widget);
+  } catch (error) { message.textContent = error.message + " · กดรีเฟรชแล้วลองใหม่"; }
 }
 
 tg.BackButton.onClick(show);
