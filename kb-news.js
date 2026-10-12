@@ -15,6 +15,7 @@ function newsActions(item) {
   ['สร้างงาน','เช็คเพิ่ม','ปรับงาน'].forEach(label => {
     const button = el('button', label);
     button.onclick = () => {
+      if(label==='เช็คเพิ่ม')return newsFollowup(item);
       current = 'new'; renderTabs();
       newTask({title:(label + ': ' + (item.headline || item.title || '')).slice(0,150),
         description:label+'จากข่าวนี้\nต้นทาง: '+(item.primary_url || item.url || '')+'\n'+(item.caption || item.summary || '')+'\n\nคำขอเพิ่มเติม: '});
@@ -23,11 +24,24 @@ function newsActions(item) {
   });
   return actions;
 }
+function newsFollowup(item) {
+  const card=el('div',null,'card'), text=el('textarea'), send=el('button','ส่งให้ Gemini Browser','primary'), back=el('button','กลับข่าว');
+  text.placeholder='ต้องการตรวจอะไรเพิ่ม เช่น ใช้ในไทยได้ไหม มีค่าใช้จ่ายอะไร';text.maxLength=4000;text.setAttribute('aria-label','คำถามตรวจข่าว');
+  const requestId=crypto.randomUUID();
+  send.onclick=async()=>{
+    if(!text.value.trim())return popup('ใส่คำถามก่อน');
+    send.disabled=true;
+    try{const r=await api('/api/daily-trends/followups',{method:'POST',body:JSON.stringify({source_url:item.primary_url || item.url,request:text.value.trim(),request_id:requestId})});popup('เข้าคิว Gemini #'+r.job_id);await news();}
+    catch(e){popup(e.message);send.disabled=false;}
+  };
+  back.onclick=news;const actions=el('div',null,'act');actions.append(send,back);
+  card.append(el('h2','เช็คเพิ่ม: '+(item.headline || item.title)),text,actions);view.replaceChildren(card);
+}
 async function news() {
   const request = ++newsRequest;
   view.replaceChildren(el('p','กำลังโหลดข่าว…','meta'));
   try {
-    const data = await api('/api/daily-trends');
+    const [data,followups] = await Promise.all([api('/api/daily-trends'),api('/api/daily-trends/followups')]);
     if (current !== 'news' || request !== newsRequest) return;
     const pipeline = data.content_pipeline || {}, meta = data.digest?.metadata || {};
     const heading = el('div', null, 'card');
@@ -50,6 +64,16 @@ async function news() {
       b.onclick=()=>{newsCategory=key;news();}; categories.append(b);
     }); heading.append(categories);
     const cards = [];
+    const checks=el('details',null,'card');checks.append(el('summary','ผลเช็คเพิ่มล่าสุด'));
+    const jobLabels={queued:'รอ Gemini',running:'Gemini กำลังตรวจ',done:'มีคำตอบแล้ว',needs_human:'ต้องตรวจคุณภาพ',failed:'ไม่สำเร็จ',cancelled:'ยกเลิก'};
+    for(const review of followups.reviews || []){
+      const row=el('details');row.append(el('summary',review.target.title+' · '+(jobLabels[review.status] || review.status)),el('pre','คำถาม: '+review.request));
+      if(review.reply)row.append(el('pre',review.reply));
+      if(review.error)row.append(el('p',review.error,'err'));
+      if(review.conversation_url)row.append(newsLink(review.conversation_url,'เปิด Gemini ↗'));
+      row.append(el('p','คำตอบ AI ต้องตรวจแหล่งอ้างอิงก่อนเผยแพร่','sub'));checks.append(row);
+    }
+    cards.push(checks);
     for (const post of (pipeline.posts || []).filter(p=>p.pipeline && (p.category || 'ai')===newsCategory).reverse()) {
       const card=el('details',null,'card');
       card.append(el('summary',post.headline+' · '+(NEWS_STATES[post.status] || post.status)));
