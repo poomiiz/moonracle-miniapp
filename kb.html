@@ -248,33 +248,15 @@ function statusBtn(id, status, label) {
   return b;
 }
 
-async function login() {
+function login() {
   try { sessionStorage.removeItem("kb_token"); } catch {}
   document.querySelector("nav").replaceChildren();
-  const card = el("div", null, "card"), message = el("p", "ยืนยันบัญชี Telegram ของพี่เพื่อเข้าใช้งาน", "sub");
-  const actions = el("div", null, "act");
-  card.append(el("h2", "เข้าสู่ระบบด้วย Telegram"), message, actions); view.replaceChildren(card);
-  try {
-    const response = await fetch(API + "/auth/telegram/config");
-    const config = await response.json();
-    if (!response.ok) throw new Error(config.detail || "เชื่อม Telegram ไม่ได้");
-    window.onTelegramLogin = async user => {
-      try {
-        const response = await fetch(API + "/auth/telegram/verify", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user, nonce: config.nonce})});
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "เข้าสู่ระบบไม่สำเร็จ");
-        sessionStorage.setItem("kb_token", data.token); renderTabs(); show();
-      } catch (error) {
-        message.textContent = error.message; const retry = el("button", "ลองเข้าสู่ระบบใหม่"); retry.type = "button"; retry.onclick = login; actions.replaceChildren(retry);
-      }
-    };
-    const widget = document.createElement("script");
-    widget.src = "https://telegram.org/js/telegram-widget.js?22";
-    widget.dataset.telegramLogin = config.bot_username;
-    widget.dataset.size = "large"; widget.dataset.userpic = "false";
-    widget.dataset.onauth = "onTelegramLogin(user)";
-    widget.async = true; actions.append(widget);
-  } catch (error) { message.textContent = error.message + " · เปิดเว็บจากปุ่มใน @nongmoonbot ยังใช้ได้"; }
+  const card = el("div", null, "card");
+  const link = el("a", "เปิดแอป Telegram เพื่อเข้าเว็บงาน");
+  link.href = "https://t.me/nongmoonbot?start=web";
+  link.style.cssText = "display:inline-block;padding:14px 18px;border-radius:12px;background:var(--accent);color:white;text-decoration:none";
+  card.append(el("h2", "เข้าใช้งานผ่าน Telegram"), el("p", "เปิด @nongmoonbot แล้วกด เปิดเว็บงาน ระบบใช้บัญชี Telegram ของพี่โดยตรง", "sub"), link);
+  view.replaceChildren(card);
 }
 
 tg.BackButton.onClick(show);
