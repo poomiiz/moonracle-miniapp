@@ -14,6 +14,8 @@ async function overviewWidgets() {
         details.append(el('summary', account.provider + ' · ' + account.label));
         details.append(el('p', account.tokens_today == null ? 'วันนี้ยังไม่มีข้อมูลการใช้โทเคน' : fmt(account.tokens_today) + ' โทเคนวันนี้', 'sub'));
         for (const model of account.models_today || []) details.append(el('p', model.model + ' · เข้า ' + fmt(model.input_tokens) + ' · ออก ' + fmt(model.output_tokens) + ' · cache อ่าน ' + fmt(model.cache_read_tokens) + ' / เขียน ' + fmt(model.cache_write_tokens), 'sub'));
+        if (account.estimated_cost_usd != null) details.append(el('p', 'ค่าประมาณวันนี้ $' + account.estimated_cost_usd.toFixed(4) + ' ตามราคาที่ widget ตั้งไว้', 'sub'));
+        if (account.unpriced_models?.length) details.append(el('p', 'ไม่มีราคาประเมิน: ' + account.unpriced_models.join(', '), 'meta'));
         const snapshot = account.snapshot;
         if (snapshot) {
           for (const [key, label] of [['usage','ใช้สะสม'],['limit_value','วงเงิน'],['limit_remaining','คงเหลือ'],['usage_daily','ใช้รายวัน'],['usage_weekly','ใช้รายสัปดาห์'],['usage_monthly','ใช้รายเดือน']]) {
