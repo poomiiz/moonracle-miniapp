@@ -57,14 +57,13 @@ svg{display:block;width:100%;height:64px}
 <body>
 <header><h1><span>☾</span> MoonRacle KB</h1><div class="status" id="status"></div></header>
 <nav id="tabs"></nav>
-<div id="work-phases"></div>
 <div id="view"></div>
 <script>
 const tg = Telegram.WebApp;
 tg.ready(); tg.expand?.();
 // API base defaults to the tunnel host; ?api= overrides for testing.
 const API = "https://kb.moonracle.com";
-const TABS = [["overview","🏠","ภาพรวม"],["new","📋","งาน"]];
+const TABS = [["overview","🏠","ภาพรวม"],["production","🎬","การผลิต"],["knowledge","📚","ความรู้"]];
 const CATEGORIES = [["overview","🏠 ภาพรวม","งานและทีม"],["music","🎵 เพลง","การผลิต"],["film","🎬 หนังสั้น","การผลิต"],["products","🛍 วิดีโอสินค้า","การผลิต"],["characters","🤖 ตัวละคร","การผลิต"],["trends","📈 ข่าวและกระแสวันนี้","ความรู้"],["tarot","🃏 ไพ่ Tarot","ความรู้"],["dhamma","🙏 ธรรมะ","ความรู้"],["divination","🧭 เครื่องมือพยากรณ์","ความรู้"],["notebook","📒 NotebookLM","ความรู้"]];
 const STATUSES = [["pending","รอทำ"],["in_progress","กำลังทำ"],["review","รอตรวจ"],["completed","เสร็จแล้ว"],["blocked","ติดปัญหา"]];
 const view = document.getElementById("view");
@@ -118,11 +117,10 @@ function renderTabs() {
   }));
 }
 function show() {
-  document.getElementById("work-phases").replaceChildren(workPhases());
   tg.BackButton.hide();
   if (current === "overview") overview();
   else if (current === "news") news();
-  else if (current === "new") workMenu();
+  else if (current === "production" || current === "knowledge") workMenu();
   else list();
 }
 
@@ -188,18 +186,9 @@ function spark(vals) {
   svg.append(line); return svg;
 }
 
-function workPhases() {
-  const row = el('div', null, 'chips'); row.setAttribute('aria-label', 'เมนูงาน');
-  [['new','＋ สั่งงาน'], ...STATUSES].forEach(([key, label]) => {
-    const active = key === 'new' ? current === 'new' : current === 'tasks' && status === key;
-    const button = el('button', label, active ? 'on' : ''); button.type = 'button';
-    button.setAttribute('aria-pressed', String(active)); button.onclick = () => go(key); row.append(button);
-  });
-  return row;
-}
 function workMenu() {
-  view.replaceChildren(el('h2', 'เลือกหมวดเพื่อสั่งงาน'));
-  for (const group of ['งานและทีม', 'การผลิต', 'ความรู้']) {
+  view.replaceChildren();
+  for (const group of [current === 'knowledge' ? 'ความรู้' : 'การผลิต']) {
     const grid = el('div', null, 'grid');
     CATEGORIES.filter(item => item[2] === group).forEach(([key, label]) => {
       const button = el('button', label, 'card category'); button.type = 'button';
@@ -219,7 +208,7 @@ function newTask(seed = {}) {
     send.disabled = true;
     try {
       const t = await api("/tasks", {method: "POST", body: JSON.stringify({title: (seed.label ? seed.label + ": " : "") + title.value.trim(), description: detail.value.trim(), priority: pri.value, assigned_agent: "Moon", context: {work_category: seed.category || "general", work_category_label: seed.label || "งานทั่วไป"}, project: "moonracle-kb"})});
-      counts = null; popup("ส่งงานแล้ว #" + String(t.id).slice(0, 8)); go("pending");
+      counts = null; popup("ส่งงานแล้ว #" + String(t.id).slice(0, 8)); workMenu();
     } catch (e) { popup(e.message); send.disabled = false; }
   };
   const back = el("button", "← เลือกหมวดใหม่"); back.type = "button"; back.onclick = workMenu;
@@ -285,7 +274,6 @@ function statusBtn(id, status, label) {
 async function login() {
   try { sessionStorage.removeItem("kb_token"); } catch {}
   document.querySelector("nav").replaceChildren();
-  document.getElementById("work-phases").replaceChildren();
   const card = el("div", null, "card"), message = el("p", "ล็อกอินด้วย Telegram ที่ปุ่มด้านล่าง เสร็จแล้วหน้างานจะเปิดในเว็บแอปนี้", "sub");
   const actions = el("div", null, "act");
   card.append(el("h2", "เข้าสู่ระบบด้วย Telegram"), message, actions); view.replaceChildren(card);
