@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MoonRacle KB</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body{margin:0;padding:12px 16px 24px;font-family:system-ui,sans-serif;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#000)}
+nav{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px}
+nav button,.act button{flex:none;padding:8px 12px;border:1px solid var(--tg-theme-hint-color,#ccc);border-radius:999px;background:none;color:inherit;font:inherit;font-size:14px}
+nav button.on{background:var(--tg-theme-button-color,#2481cc);color:var(--tg-theme-button-text-color,#fff);border-color:transparent}
+.card{padding:12px;margin-bottom:8px;border-radius:10px;background:var(--tg-theme-secondary-bg-color,#f4f4f4)}
+.meta{font-size:12px;color:var(--tg-theme-hint-color,#888);margin-top:4px}
+.err{color:#d33}
+pre{white-space:pre-wrap;word-break:break-word;font:inherit;margin:8px 0}
+.act{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+</style>
+</head>
+<body>
+<nav id="tabs"></nav>
+<div id="view"></div>
+<script>
+const tg = Telegram.WebApp;
+tg.ready();
+// API base defaults to the tunnel host; ?api= overrides for testing.
+const API = new URLSearchParams(location.search).get("api") || "https://kb.moonracle.com";
+const TABS = [["pending","รอทำ"],["in_progress","กำลังทำ"],["review","รอตรวจ"],["blocked","ติดอยู่"]];
+const view = document.getElementById("view");
+let current = "pending";
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, {...opts, headers: {"X-Telegram-Init-Data": tg.initData, "Content-Type": "application/json"}});
+  if (r.status === 401) throw new Error("เข้าไม่ได้ ต้องเปิดผ่านปุ่มใน @nongmoonbot");
+  if (!r.ok) throw new Error("เกิดข้อผิดพลาด " + r.status);
+  return r.json();
+}
+function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+function fail(e) { view.replaceChildren(el("p", e.message, "err")); }
+
+function renderTabs() {
+  const nav = document.getElementById("tabs");
+  nav.replaceChildren(...TABS.map(([k, label]) => {
+    const b = el("button", label, k === current ? "on" : "");
+    b.onclick = () => { current = k; renderTabs(); list(); };
+    return b;
+  }));
+}
+
+async function list() {
+  tg.BackButton.hide();
+  view.replaceChildren(el("p", "กำลังโหลด…", "meta"));
+  try {
+    const tasks = await api(`/tasks?status=${current}&limit=50`);
+    if (!tasks.length) return view.replaceChildren(el("p", "ไม่มีงาน", "meta"));
+    view.replaceChildren(...tasks.map(t => {
+      const c = el("div", null, "card");
+      c.append(el("div", t.title), el("div", `${t.project || "-"} · ${t.priority || "-"} · ${t.assigned_agent || "-"}`, "meta"));
+      c.onclick = () => detail(t.id);
+      return c;
+    }));
+  } catch (e) { fail(e); }
+}
+
+async function detail(id) {
+  tg.BackButton.show();
+  try {
+    const t = await api(`/tasks/${encodeURIComponent(id)}`);
+    const c = el("div", null, "card");
+    c.append(el("div", t.title), el("div", `${t.status} · ${t.project || "-"} · ${t.priority || "-"} · ${t.assigned_agent || "-"}`, "meta"));
+    if (t.blocked_reason) c.append(el("pre", "ติดอยู่: " + t.blocked_reason));
+    if (t.description) c.append(el("pre", t.description));
+    if (t.handoff_notes) c.append(el("pre", "ส่งต่อ: " + t.handoff_notes));
+    const act = el("div", null, "act");
+    if (t.status === "review") act.append(statusBtn(t.id, "completed", "ผ่าน ปิดงาน"), statusBtn(t.id, "in_progress", "ส่งกลับไปแก้"));
+    if (t.status === "blocked") act.append(statusBtn(t.id, "pending", "ปลดให้ทำต่อ"));
+    c.append(act);
+    view.replaceChildren(c);
+  } catch (e) { fail(e); }
+}
+
+function statusBtn(id, status, label) {
+  const b = el("button", label);
+  b.onclick = () => tg.showConfirm(`ยืนยัน: ${label}?`, async ok => {
+    if (!ok) return;
+    try { await api(`/tasks/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify({status})}); list(); }
+    catch (e) { tg.showAlert(e.message); }
+  });
+  return b;
+}
+
+tg.BackButton.onClick(list);
+renderTabs();
+list();
+</script>
+</body>
+</html>
