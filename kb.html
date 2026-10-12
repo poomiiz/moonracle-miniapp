@@ -121,8 +121,10 @@ function renderTabs() {
   }));
 }
 function show() {
+  if (current !== "room") window.MoonRoom?.stop();
   tg.BackButton.hide();
-  if (current === "overview") overview();
+  if (current === "room") centralRoom();
+  else if (current === "overview") overview();
   else if (["news","content"].includes(current)) news();
   else if (current === "production" || current === "knowledge") workMenu();
   else list();
@@ -178,7 +180,9 @@ async function overview() {
     });
   } else team.append(el("div", "ยังไม่มีข้อมูล", "sub"));
 
-  view.replaceChildren(grid, trend, know, team);
+  const widgets = await overviewWidgets();
+  if (current !== "overview") return;
+  view.replaceChildren(...widgets, grid, trend, know, team);
 }
 
 function spark(vals) {
@@ -308,5 +312,7 @@ tg.BackButton.onClick(show);
 if (!tg.initData && !token()) login(); else { renderTabs(); show(); }
 </script>
 <script src="kb-news.js"></script>
+<script src="room.js"></script>
+<script src="kb-overview.js"></script>
 </body>
 </html>
