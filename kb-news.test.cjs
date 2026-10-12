@@ -12,9 +12,9 @@ assert.equal(context.newsLink('https://example.com','ต้นทาง').rel,'n
 const buttons=context.newsActions({title:'ข่าว',url:'https://example.com'}).children;
 buttons[0].onclick();assert.equal(context.current,'new');assert.match(seed.description,/https:\/\/example.com/);assert.match(seed.title,/สร้างงาน/);
 buttons[1].onclick();assert.equal(view.children[0].children[1].tag,'textarea');
-context.current='news';
+context.current='content';
 context.news().then(()=>{
   const text=JSON.stringify(view.children);
-  assert.match(text,/โพสต์แล้ว/);assert.match(text,/มีบางส่วน ต้องตรวจเพิ่ม/);assert.match(text,/ราคาไม่ยืนยัน/);
+  assert.match(text,/โพสต์แล้ว/);assert.doesNotMatch(text,/ราคาไม่ยืนยัน/);
   assert.match(text,/เปิดโพสต์จริง/);console.log('News Mini App checks passed');
 }).catch(e=>{console.error(e);process.exitCode=1});

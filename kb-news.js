@@ -1,6 +1,23 @@
 // Uses the same signed API session and task queue as the main Mini App.
 const NEWS_CATEGORIES = {ai:'AI',github:'GitHub',tech:'Tech',film:'หนังสั้น',music_short:'เพลง / Shorts'};
-const NEWS_STATES = {checking:'ตรวจต้นทาง',needs_review:'รอตรวจ / ต้องปรับ',generating_image:'สร้างภาพ',needs_headline:'รอหัวภาพ',ready_to_publish:'พร้อมจัดคิว',publishing:'กำลังโพสต์',published:'โพสต์แล้ว'};
+const NEWS_STATES = {checking:'ตรวจต้นทาง',needs_review:'รอตรวจ / ต้องปรับ',generating_image:'สร้างภาพ',needs_headline:'รอหัวภาพ',ready_to_publish:'รอพี่อนุมัติ',publishing:'กำลังโพสต์',published:'โพสต์แล้ว'};
+let newsImages = [];
+async function postPreview(post,card) {
+  if(!post.approval_revision)return;
+  const response=await fetch(API+'/api/daily-trends/posts/'+encodeURIComponent(post.id)+'/image',{headers:authHeaders()});
+  if(!response.ok)throw new Error('เปิดภาพไม่ได้ กรุณาเปิดตรวจใหม่');
+  if(!card.isConnected)return;
+  const url=URL.createObjectURL(await response.blob());newsImages.push(url);
+  const image=el('img');image.src=url;image.alt='ภาพจริงที่จะใช้กับโพสต์นี้';image.style.width='100%';card.append(image);
+  const approved=post.owner_approval?.revision===post.approval_revision;
+  if(approved){card.append(el('p','อนุมัติฉบับนี้แล้ว รอคิวโพสต์','g'));return;}
+  const button=el('button','อนุมัติข้อความและภาพนี้','primary');
+  button.onclick=async()=>{
+    button.disabled=true;
+    try{await api('/api/daily-trends/posts/'+encodeURIComponent(post.id)+'/approve',{method:'POST',body:JSON.stringify({revision:post.approval_revision})});popup('อนุมัติแล้วและจัดคิวโพสต์');await news();}
+    catch(e){popup(e.message);button.disabled=false;}
+  };card.append(button);
+}
 let newsCategory = 'ai';
 let newsRequest = 0;
 function newsLink(value, label) {
@@ -38,14 +55,15 @@ function newsFollowup(item) {
   card.append(el('h2','เช็คเพิ่ม: '+(item.headline || item.title)),text,actions);view.replaceChildren(card);
 }
 async function news() {
+  newsImages.forEach(url=>URL.revokeObjectURL(url));newsImages=[];
   const request = ++newsRequest;
   view.replaceChildren(el('p','กำลังโหลดข่าว…','meta'));
   try {
     const [data,followups] = await Promise.all([api('/api/daily-trends'),api('/api/daily-trends/followups')]);
-    if (current !== 'news' || request !== newsRequest) return;
+    if (!['news','content'].includes(current) || request !== newsRequest) return;
     const pipeline = data.content_pipeline || {}, meta = data.digest?.metadata || {};
     const heading = el('div', null, 'card');
-    heading.append(el('h2','ข่าวและโพสต์ PooMi'),el('p',(data.automatic_update?'ตัวเก็บข่าวทำงานทุก '+((data.refresh_interval_seconds || 300)/60)+' นาที':'ตัวเก็บข่าวยังไม่ยืนยันว่าทำงาน')+' · แสดงผลวิเคราะห์ล่าสุด 100 เรื่อง · คะแนนเป็นความเห็น AI','sub'));
+    heading.append(el('h2',current==='content'?'คอนเทนต์โพสต์ PooMi':'ข่าวและกระแสวันนี้'),el('p',(data.automatic_update?'ตัวเก็บข่าวทำงานทุก '+((data.refresh_interval_seconds || 300)/60)+' นาที':'ตัวเก็บข่าวยังไม่ยืนยันว่าทำงาน')+' · แสดงผลวิเคราะห์ล่าสุด 100 เรื่อง · คะแนนเป็นความเห็น AI','sub'));
     if (meta.refreshed_at) heading.append(el('p','ข้อมูลล่าสุด '+new Date(meta.refreshed_at).toLocaleString('th-TH'),'meta'));
     const actions = el('div', null, 'act');
     [['อัปเดตข่าว','/refresh'],['ให้ Gemini วิเคราะห์','/analyse']].forEach(([label,path]) => {
@@ -74,7 +92,7 @@ async function news() {
       row.append(el('p','คำตอบ AI ต้องตรวจแหล่งอ้างอิงก่อนเผยแพร่','sub'));checks.append(row);
     }
     cards.push(checks);
-    for (const post of (pipeline.posts || []).filter(p=>p.pipeline && (p.category || 'ai')===newsCategory).reverse()) {
+    for (const post of (current==='content' ? pipeline.posts || [] : []).filter(p=>p.pipeline && (p.category || 'ai')===newsCategory).reverse()) {
       const card=el('details',null,'card');
       card.append(el('summary',post.headline+' · '+(NEWS_STATES[post.status] || post.status)));
       card.append(el('p','ภาษา '+post.language+' · '+(post.editorial_status==='rejected'?'ต้องปรับคุณภาพ':'') ,'meta'));
@@ -83,8 +101,11 @@ async function news() {
       card.append(newsLink(post.primary_url,'เปิดต้นทาง ↗'));
       if(post.post_url)card.append(' · ',newsLink(post.post_url,'เปิดโพสต์จริง ↗'));
       card.append(newsActions(post));cards.push(card);
+      if(post.approval_revision)card.addEventListener('toggle',()=>{
+        if(card.open && !card.dataset.preview){card.dataset.preview='loading';postPreview(post,card).catch(e=>{delete card.dataset.preview;card.append(el('p',e.message,'err'));});}
+      });
     }
-    for(const analysis of pipeline.analyses || []) {
+    for(const analysis of current==='news' ? pipeline.analyses || [] : []) {
       const source=analysis.source || {};
       if(({'ข่าว AI':'ai','ข่าว GitHub':'github','ข่าว Tech':'tech'}[source.category] || 'tech')!==newsCategory)continue;
       const card=el('details',null,'card');
@@ -98,6 +119,6 @@ async function news() {
     for(const item of (meta.items || []).filter(i=>i.category===category)) {
       const row=el('details');row.append(el('summary',item.title),el('pre',item.summary || 'ต้นทางให้เฉพาะพาดหัว'),newsLink(item.url,'เปิดต้นทาง ↗'),newsActions(item));raw.append(row);
     }
-    view.replaceChildren(heading,...cards,raw);
-  }catch(e){if(current==='news' && request===newsRequest)fail(e);}
+    view.replaceChildren(heading,...cards,...(current==='news'?[raw]:[]));
+  }catch(e){if(['news','content'].includes(current) && request===newsRequest)fail(e);}
 }

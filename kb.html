@@ -64,17 +64,21 @@ tg.ready(); tg.expand?.();
 // API base defaults to the tunnel host; ?api= overrides for testing.
 const API = "https://kb.moonracle.com";
 const TABS = [["overview","🏠","ภาพรวม"],["production","🎬","การผลิต"],["knowledge","📚","ความรู้"]];
-const CATEGORIES = [["overview","🏠 ภาพรวม","งานและทีม"],["music","🎵 เพลง","การผลิต"],["film","🎬 หนังสั้น","การผลิต"],["products","🛍 วิดีโอสินค้า","การผลิต"],["characters","🤖 ตัวละคร","การผลิต"],["trends","📈 ข่าวและกระแสวันนี้","ความรู้"],["tarot","🃏 ไพ่ Tarot","ความรู้"],["dhamma","🙏 ธรรมะ","ความรู้"],["divination","🧭 เครื่องมือพยากรณ์","ความรู้"],["notebook","📒 NotebookLM","ความรู้"]];
+const CATEGORIES = [["overview","🏠 ภาพรวม","งานและทีม"],["content","📝 คอนเทนต์โพสต์","การผลิต"],["music","🎵 เพลง","การผลิต"],["film","🎬 หนังสั้น","การผลิต"],["products","🛍 วิดีโอสินค้า","การผลิต"],["characters","🤖 ตัวละคร","การผลิต"],["trends","📈 ข่าวและกระแสวันนี้","ความรู้"],["tarot","🃏 ไพ่ Tarot","ความรู้"],["dhamma","🙏 ธรรมะ","ความรู้"],["divination","🧭 เครื่องมือพยากรณ์","ความรู้"],["notebook","📒 NotebookLM","ความรู้"]];
 const STATUSES = [["pending","รอทำ"],["in_progress","กำลังทำ"],["review","รอตรวจ"],["completed","เสร็จแล้ว"],["blocked","ติดปัญหา"]];
 const view = document.getElementById("view");
 let current = "overview", status = "pending", counts = null;
 
 // Inside Telegram we send signed initData; in a normal browser we use an verified Telegram Login bearer token.
 function token() { try { return sessionStorage.getItem("kb_token"); } catch { return null; } }
-async function api(path, opts = {}) {
+function authHeaders() {
   const headers = {"Content-Type": "application/json"};
   if (tg.initData) headers["X-Telegram-Init-Data"] = tg.initData;
   else if (token()) headers["Authorization"] = "Bearer " + token();
+  return headers;
+}
+async function api(path, opts = {}) {
+  const headers = authHeaders();
   const r = await fetch(API + path, {...opts, headers});
   if (r.status === 401 && !tg.initData) { try { sessionStorage.removeItem("kb_token"); } catch {} login(); throw new Error("กรุณาล็อกอิน"); }
   if (r.status === 401) throw new Error("เข้าไม่ได้ ต้องเปิดผ่านปุ่มใน @nongmoonbot");
@@ -119,7 +123,7 @@ function renderTabs() {
 function show() {
   tg.BackButton.hide();
   if (current === "overview") overview();
-  else if (current === "news") news();
+  else if (["news","content"].includes(current)) news();
   else if (current === "production" || current === "knowledge") workMenu();
   else list();
 }
@@ -192,7 +196,7 @@ function workMenu() {
     const grid = el('div', null, 'grid');
     CATEGORIES.filter(item => item[2] === group).forEach(([key, label]) => {
       const button = el('button', label, 'card category'); button.type = 'button';
-      button.onclick = () => key === 'overview' ? go('overview') : key === 'trends' ? go('news') : newTask({category:key, label}); grid.append(button);
+      button.onclick = () => key === 'overview' ? go('overview') : key === 'content' ? go('content') : key === 'trends' ? go('news') : newTask({category:key, label}); grid.append(button);
     });
     view.append(el('h2', group, 'group-title'), grid);
   }
