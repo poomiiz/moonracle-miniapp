@@ -2,33 +2,60 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MoonRacle KB</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-body{margin:0;padding:12px 16px 24px;font-family:system-ui,sans-serif;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#000)}
-nav{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px}
-nav button,.act button{flex:none;padding:8px 12px;border:1px solid var(--tg-theme-hint-color,#ccc);border-radius:999px;background:none;color:inherit;font:inherit;font-size:14px}
-nav button.on{background:var(--tg-theme-button-color,#2481cc);color:var(--tg-theme-button-text-color,#fff);border-color:transparent}
-.card{padding:12px;margin-bottom:8px;border-radius:10px;background:var(--tg-theme-secondary-bg-color,#f4f4f4)}
-.meta{font-size:12px;color:var(--tg-theme-hint-color,#888);margin-top:4px}
-.err{color:#d33}
-input{width:100%;box-sizing:border-box;padding:10px;font:inherit;font-size:20px;letter-spacing:.3em;border:1px solid var(--tg-theme-hint-color,#ccc);border-radius:8px;background:var(--tg-theme-bg-color,#fff);color:inherit}
-pre{white-space:pre-wrap;word-break:break-word;font:inherit;margin:8px 0}
+/* Mobile take on the KB "ภาพรวม" dashboard; dark only, matching the desktop KB. */
+:root{--bg:#12111c;--panel:#1b1a29;--line:#2a2840;--fg:#e8e6f3;--muted:#8d8aa6;--accent:#7c6cf0;--num:#8ea2ff;--warn:#f2c14e;--ok:#3ecf8e;--bad:#f05d5e;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;padding:12px 16px 32px;font-family:"IBM Plex Sans Thai",system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+h1{font-size:18px;margin:0}
+h1 span{color:var(--accent)}
+.status{font-size:12px;color:var(--muted)}
+nav{display:flex;gap:6px;overflow-x:auto;margin:0 -16px 12px;padding:0 16px}
+button{font:inherit;color:inherit;cursor:pointer}
+nav button,.act button{flex:none;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:14px}
+nav button.on{background:var(--accent);border-color:transparent;color:#fff}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.card{padding:12px;border-radius:12px;background:var(--panel);border:1px solid var(--line);margin-bottom:8px}
+.grid .card{margin:0}
+.wide{grid-column:1/-1}
+.tile .head{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:14px;font-weight:600}
+.tile .n{font-size:24px;font-weight:700;color:var(--num);font-variant-numeric:tabular-nums}
+.sub{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
+.sub b{font-weight:600;font-variant-numeric:tabular-nums}
+.y{color:var(--warn)}.g{color:var(--ok)}.r{color:var(--bad)}
+.bar{height:4px;border-radius:2px;background:var(--line);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.row:last-child{border:0}
+.row b{font-variant-numeric:tabular-nums}
+h2{font-size:15px;margin:0 0 8px}
+.meta{font-size:12px;color:var(--muted);margin-top:4px}
+.err{color:var(--bad)}
+input,textarea,select{width:100%;padding:10px;font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;margin-bottom:8px}
+.otp{font-size:20px;letter-spacing:.3em}
+textarea{min-height:120px}
+pre{white-space:pre-wrap;word-break:break-word;font:inherit;margin:8px 0;font-size:14px}
 .act{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.primary{background:var(--accent)!important;border-color:transparent!important;color:#fff}
+svg{display:block;width:100%;height:64px}
 </style>
 </head>
 <body>
+<header><h1><span>☾</span> MoonRacle KB</h1><div class="status" id="status"></div></header>
 <nav id="tabs"></nav>
 <div id="view"></div>
 <script>
 const tg = Telegram.WebApp;
-tg.ready();
+tg.ready(); tg.expand?.();
 // API base defaults to the tunnel host; ?api= overrides for testing.
 const API = new URLSearchParams(location.search).get("api") || "https://kb.moonracle.com";
-const TABS = [["pending","รอทำ"],["in_progress","กำลังทำ"],["review","รอตรวจ"],["blocked","ติดอยู่"]];
+const TABS = [["overview","ภาพรวม"],["new","+ สั่งงาน"],["pending","รอทำ"],["in_progress","กำลังทำ"],["review","รอตรวจ"],["blocked","ติดอยู่"]];
 const view = document.getElementById("view");
-let current = "pending";
+let current = "overview";
 
 // Inside Telegram we send signed initData; in a normal browser we use an OTP bearer token.
 function token() { try { return sessionStorage.getItem("kb_token"); } catch { return null; } }
@@ -44,18 +71,118 @@ async function api(path, opts = {}) {
 }
 function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 function fail(e) { view.replaceChildren(el("p", e.message, "err")); }
+function popup(msg) { tg.initData ? tg.showAlert(msg) : alert(msg); }
+const fmt = n => n == null ? "–" : Number(n).toLocaleString("en-US");
+// "label <b class=cls>value</b>" pairs, built without innerHTML.
+function sub(...pairs) {
+  const d = el("div", null, "sub");
+  pairs.forEach(([label, value, cls], i) => { if (i) d.append(" · "); d.append(label + " "); d.append(el("b", fmt(value), cls)); });
+  return d;
+}
+function tile(title, n, subs, pct, onclick) {
+  const c = el("div", null, "card tile"), h = el("div", null, "head");
+  h.append(el("span", title), el("span", fmt(n), "n"));
+  c.append(h, ...subs);
+  if (pct != null) { const b = el("div", null, "bar"), i = el("i"); i.style.width = Math.max(0, Math.min(100, pct)) + "%"; b.append(i); c.append(b); }
+  if (onclick) c.onclick = onclick;
+  return c;
+}
+function go(tab) { current = tab; renderTabs(); show(); }
 
 function renderTabs() {
-  const nav = document.getElementById("tabs");
-  nav.replaceChildren(...TABS.map(([k, label]) => {
+  document.getElementById("tabs").replaceChildren(...TABS.map(([k, label]) => {
     const b = el("button", label, k === current ? "on" : "");
-    b.onclick = () => { current = k; renderTabs(); list(); };
+    b.onclick = () => go(k);
     return b;
   }));
 }
+function show() {
+  tg.BackButton.hide();
+  if (current === "overview") overview();
+  else if (current === "new") newTask();
+  else list();
+}
+
+async function overview() {
+  view.replaceChildren(el("p", "กำลังโหลด…", "meta"));
+  const get = p => api(p).catch(() => null);
+  const [meta, music, film, jobs, nlm, cron, intel] = await Promise.all([
+    get("/dashboard/meta"), get("/music/api/stats"), get("/film/episodes"),
+    get("/bot/api/jobs?site=flow&limit=100"), get("/api/notebooklm/status"), get("/api/cron/jobs"), get("/dc/agent-intel")]);
+  if (!meta) return fail(new Error("ดึงข้อมูลไม่ได้ คอมอาจปิดอยู่"));
+  const st = document.getElementById("status"); st.replaceChildren(el("span", "● ", meta.vault_ok ? "g" : "y"), "API OK · " + new Date().toLocaleTimeString("th-TH", {hour: "2-digit", minute: "2-digit"}));
+
+  const o = meta.task_open_counts || {}, open = (o.pending || 0) + (o.in_progress || 0) + (o.review || 0) + (o.blocked || 0);
+  const cronOn = cron?.jobs ? cron.jobs.filter(j => j.enabled).length : null;
+  const grid = el("div", null, "grid");
+  grid.append(tile("งานระบบ", open, [sub(["กำลังทำ", o.in_progress], ["รอตรวจ", o.review, "y"], ["ติดปัญหา", o.blocked, "r"]), sub(["งานอัตโนมัติเปิด", cronOn])], null, () => go("review")));
+  grid.lastChild.classList.add("wide");
+  if (music) {
+    grid.append(tile("เพลง", music.total, [sub(["มีลิงก์", music.has_social, "y"], ["คลิปสั้น", music.shorts_count, "y"])], music.total ? 100 * (music.has_social || 0) / music.total : null));
+    grid.append(tile("MV", music.has_mv, [sub(["ยอดดู", music.mv_views, "g"])], music.total ? 100 * (music.has_mv || 0) / music.total : null));
+  }
+  if (Array.isArray(film)) {
+    const qc = film.filter(e => e.status === "qc_passed").length, pub = film.filter(e => e.status === "published").length;
+    grid.append(tile("หนังสั้น", film.length, [sub(["ผ่าน QC", qc, "y"], ["ลงแล้ว", pub, "g"])], film.length ? 100 * pub / film.length : null));
+  }
+  if (Array.isArray(jobs)) {
+    const sv = jobs.filter(j => j.created_by === "shopee-video" && j.action === "video" && j.payload?.shopee_video);
+    const files = sv.filter(j => (j.result?.files || []).some(f => /\.(mp4|webm)$/i.test(String(f)))).length;
+    const running = sv.filter(j => ["queued", "running"].includes(j.status)).length;
+    grid.append(tile("วิดีโอ Shopee", sv.length, [sub(["มีไฟล์", files, "y"], ["รอ/กำลังทำ", running, "y"])]));
+  }
+  if (nlm?.topics) grid.append(tile("NotebookLM", nlm.topics.length, [sub(["กำลังทำ", nlm.topics.filter(t => /run|progress/i.test(t.status || "")).length, "y"])]));
+
+  const know = el("div", null, "card");
+  know.append(el("h2", "ความรู้"));
+  [["Dev logs", meta.dc_dev_logs, "y"], ["Learnings", meta.learnings_total, "g"], ["แหล่งความรู้ RAG", meta.rag_chunks, "g"], ["Chunks ไม่มี embedding", meta.rag_backlog, "y"]].forEach(([k, v, c]) => {
+    const r = el("div", null, "row"); r.append(el("span", k), el("b", fmt(v), c)); know.append(r);
+  });
+
+  const trend = el("div", null, "card"), vel = meta.task_velocity || [];
+  const done7 = vel.reduce((s, d) => s + (d.count || 0), 0);
+  trend.append(el("h2", "แนวโน้มงาน 7 วัน"), el("div", `เสร็จ ${done7} งาน · วันนี้ ${fmt(meta.today_done)}`, "sub"));
+  if (vel.length > 1) trend.append(spark(vel.map(d => d.count || 0)));
+
+  const team = el("div", null, "card");
+  team.append(el("h2", "ผลงานทีม"));
+  if (Array.isArray(intel) && intel.length) {
+    [...intel].sort((a, b) => (b.task_count || 0) - (a.task_count || 0)).slice(0, 5).forEach(a => {
+      const r = el("div", null, "row"); r.append(el("span", a.agent), el("b", `${fmt(a.task_count)} งาน · ${Math.round((a.overall_success_rate || 0) * (a.overall_success_rate <= 1 ? 100 : 1))}%`));
+      team.append(r);
+    });
+  } else team.append(el("div", "ยังไม่มีข้อมูล", "sub"));
+
+  view.replaceChildren(grid, trend, know, team);
+}
+
+function spark(vals) {
+  const w = 300, h = 64, max = Math.max(1, ...vals), step = w / (vals.length - 1);
+  const pts = vals.map((v, i) => `${(i * step).toFixed(1)},${(h - 6 - (v / max) * (h - 12)).toFixed(1)}`).join(" ");
+  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"), line = document.createElementNS(ns, "polyline");
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.setAttribute("preserveAspectRatio", "none");
+  line.setAttribute("points", pts); line.setAttribute("fill", "none"); line.setAttribute("stroke", "#7c6cf0"); line.setAttribute("stroke-width", "2.5"); line.setAttribute("vector-effect", "non-scaling-stroke");
+  svg.append(line); return svg;
+}
+
+function newTask() {
+  const c = el("div", null, "card"), title = el("input"), detail = el("textarea"), pri = el("select"), send = el("button", "ส่งงานให้น้องมูน", "primary");
+  title.placeholder = "หัวข้องาน"; title.maxLength = 150; detail.placeholder = "รายละเอียด";
+  [["normal", "ปกติ"], ["low", "ต่ำ"], ["high", "สูง"]].forEach(([v, t]) => { const o = el("option", t); o.value = v; pri.append(o); });
+  const act = el("div", null, "act"); act.append(send);
+  send.onclick = async () => {
+    if (!title.value.trim()) return popup("ใส่หัวข้องานก่อน");
+    send.disabled = true;
+    try {
+      const t = await api("/tasks", {method: "POST", body: JSON.stringify({title: title.value.trim(), description: detail.value.trim(), priority: pri.value, assigned_agent: "Moon"})});
+      popup("ส่งงานแล้ว #" + String(t.id).slice(0, 8)); go("pending");
+    } catch (e) { popup(e.message); send.disabled = false; }
+  };
+  c.append(el("h2", "สั่งงานใหม่"), title, pri, detail, act);
+  view.replaceChildren(c);
+}
 
 async function list() {
-  tg.BackButton.hide();
   view.replaceChildren(el("p", "กำลังโหลด…", "meta"));
   try {
     const tasks = await api(`/tasks?status=${current}&limit=50`);
@@ -74,7 +201,7 @@ async function detail(id) {
   try {
     const t = await api(`/tasks/${encodeURIComponent(id)}`);
     const c = el("div", null, "card");
-    c.append(el("div", t.title), el("div", `${t.status} · ${t.project || "-"} · ${t.priority || "-"} · ${t.assigned_agent || "-"}`, "meta"));
+    c.append(el("h2", t.title), el("div", `${t.status} · ${t.project || "-"} · ${t.priority || "-"} · ${t.assigned_agent || "-"}`, "meta"));
     if (t.blocked_reason) c.append(el("pre", "ติดอยู่: " + t.blocked_reason));
     if (t.description) c.append(el("pre", t.description));
     if (t.handoff_notes) c.append(el("pre", "ส่งต่อ: " + t.handoff_notes));
@@ -90,8 +217,8 @@ function statusBtn(id, status, label) {
   const b = el("button", label);
   const run = async ok => {
     if (!ok) return;
-    try { await api(`/tasks/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify({status})}); list(); }
-    catch (e) { tg.initData ? tg.showAlert(e.message) : alert(e.message); }
+    try { await api(`/tasks/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify({status})}); show(); }
+    catch (e) { popup(e.message); }
   };
   // Telegram popups only work inside Telegram; plain browsers use confirm().
   b.onclick = () => tg.initData ? tg.showConfirm(`ยืนยัน: ${label}?`, run) : run(confirm(`ยืนยัน: ${label}?`));
@@ -101,23 +228,23 @@ function statusBtn(id, status, label) {
 function login() {
   document.getElementById("tabs").replaceChildren();
   const c = el("div", null, "card"), msg = el("p", "กดขอรหัส แล้วใส่รหัส 6 หลักที่ @nongmoonbot ส่งให้ใน Telegram", "meta");
-  const code = el("input"); code.inputMode = "numeric"; code.maxLength = 6; code.autocomplete = "one-time-code";
-  const req = el("button", "ขอรหัส"), go = el("button", "เข้าสู่ระบบ"), act = el("div", null, "act");
+  const code = el("input", null, "otp"); code.inputMode = "numeric"; code.maxLength = 6; code.autocomplete = "one-time-code";
+  const req = el("button", "ขอรหัส"), ok = el("button", "เข้าสู่ระบบ", "primary"), act = el("div", null, "act");
   req.onclick = async () => {
     const r = await fetch(API + "/auth/otp/request", {method: "POST"}).catch(() => null);
     msg.textContent = !r ? "ติดต่อคอมไม่ได้" : r.ok ? "ส่งรหัสแล้ว ดูใน Telegram" : r.status === 429 ? "ขอได้นาทีละครั้ง รอสักครู่" : "ขอรหัสไม่ได้ (" + r.status + ")";
   };
-  go.onclick = async () => {
+  ok.onclick = async () => {
     const r = await fetch(API + "/auth/otp/verify", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code: code.value.trim()})}).catch(() => null);
     if (!r || !r.ok) { msg.textContent = r && r.status === 401 ? "รหัสไม่ถูกหรือหมดอายุ" : "ล็อกอินไม่ได้"; return; }
     try { sessionStorage.setItem("kb_token", (await r.json()).token); } catch {}
-    renderTabs(); list();
+    renderTabs(); show();
   };
-  act.append(req, go); c.append(msg, code, act); view.replaceChildren(c);
+  act.append(req, ok); c.append(el("h2", "เข้าสู่ระบบ"), msg, code, act); view.replaceChildren(c);
 }
 
-tg.BackButton.onClick(list);
-if (!tg.initData && !token()) login(); else { renderTabs(); list(); }
+tg.BackButton.onClick(show);
+if (!tg.initData && !token()) login(); else { renderTabs(); show(); }
 </script>
 </body>
 </html>
